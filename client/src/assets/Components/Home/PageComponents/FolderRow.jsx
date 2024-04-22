@@ -67,7 +67,7 @@ export default FolderRow;
 export const NoFolder = () => {
     return(
         <div className="no-folder">
-        <a className='no-folder-a' >No Folder Added ! <br /> <span style={{fontSize:15}}>Click to Create ..</span><br />
+        <a className='no-folder-a' >No folder added yet ...
         </a>
     </div>
 )

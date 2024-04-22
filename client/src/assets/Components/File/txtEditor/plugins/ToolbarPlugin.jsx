@@ -539,9 +539,9 @@ export default function ToolbarPlugin({isActive}) {
     }
   }, [editor, isLink]);
 
-
   const [isAiActive,setIsAiActive] = useState(null)
   isActive(isAiActive)
+
   return (
     <div className="toolbar" ref={toolbarRef}>
       <button

@@ -37,6 +37,8 @@ import ChatMessage from "../chatMessage"
 export default function Editor({setData,setContent,audioUrl,passTranscription,isSubscribed}) {
 
 
+//<********************  INITIAL STATE LOAD  ********************>
+
 const [initialEditorState, setInitialEditorState] = useState(null)
 
 const loadContent = async () => {
@@ -46,9 +48,13 @@ const loadContent = async () => {
 }
 
 useEffect(() => {
+  if ( initialEditorState != null ){
   const initialEditorState = loadContent();
   setInitialEditorState(initialEditorState)
+  }
 },[])
+
+//<********************  Config ********************>
 
 const editorConfig = {
   // The editor theme
@@ -74,13 +80,19 @@ const editorConfig = {
   ]
 };
 
+const editorStateRef = useRef();
+
+
+//<********************  Variables  ********************>
+
 const functions = getFunctions(app);
 
-//GPT
-const [aiTxt,setAiTxt] = useState("")//INPUT
+//AI CHATBOT
+const [aiTxt,setAiTxt] = useState("")
 const [chatLog,setChatLog] = useState([])
-const [questionLoading, setQuestionLoading] = useState(false)
 
+//AI TOGGLE STATES
+const [questionLoading, setQuestionLoading] = useState(false)
 const [isFirstQuestion,setIsFirstQuestion] = useState(true)
 const [isAiActive,setIsAiActive] = useState(false)
 
@@ -91,125 +103,162 @@ const [transcriptScript,setTranscriptScript] = useState("")
 const [summerisingIsLoading,setSummerisingIsLoading] = useState(false)
 
 
-const handleInputChange = (e) => {
-  const userInput = e.target.value;
-  setAiTxt(userInput);
+//<********************  Functions  ********************>
+
+// <===> VIDEO TRANSCRIPTION FETCH  <===>
+
+const fetchTranscription = async (transcription) => {
+
+  const data = await fetch(transcription)
+  if (!data.ok) {
+    throw new Error('Network response was not ok');
+  }
+  const dataJson = await data.json()
+  return dataJson
+    
+}
+
+// <===> PROMPT QUESTION --> ANSWER HANDLER  <===>
+
+const generateTextFromPrompt = async (request) => {
+  const generateTextFunction = httpsCallable(functions, 'openAIHttpFunctionSec');
+  if(request.type == "analasys"){
+    const userQuestionShow = "[ SCRIPT ANALISYS ] " + aiTxt
+    let chatLogNew = [...chatLog, {user: "me", message: `${userQuestionShow}`} ]
+    try {
+      const result = await generateTextFunction({name: request.message});
+
+      setQuestionLoading(false)
+      setChatLog([...chatLogNew, {user: "gpt", message: `${result.data.data.choices[0].message.content}`}])
+    } catch (error) {
+      console.error('Firebase function invocation failed:', error);
+    }
+  } else if(request.type == "text"){
+    const userQuestionShow = aiTxt
+    let chatLogNew = [...chatLog, {user: "me", message: `${userQuestionShow}`} ]
+    try {
+      const result = await generateTextFunction({name: request.message});
+
+      setQuestionLoading(false)
+      setChatLog([...chatLogNew, {user: "gpt", message: `${result.data.data.choices[0].message.content}`}])
+    } catch (error) {
+      console.error('Firebase function invocation failed:', error);
+    }
+  } else if(request.type == "sum"){
+    const userQuestionShow = "[ SUMMERY IN PROCESS ] "
+    let chatLogNew = [...chatLog, {user: "me", message: `${userQuestionShow}`} ]
+    try {
+      const result = await generateTextFunction({name: request.message});
+
+      setChatLog([...chatLogNew, {user: "gpt", message: `${result.data.data.choices[0].message.content}`}])
+      setSummerisingIsLoading(false)
+      setQuestionLoading(false)
+    } catch (error) {
+      console.error('Firebase function invocation failed:', error);
+    }
+    } else {
+      alert("Something went wrong. Please Refresh the page !")
+    }
 };
 
 const handleEnterPress = (e) => {
   if (e.key === 'Enter') {
 
     if(questionLoading == false){
-      // Do something when Enter is pressed, e.g., trigger a function or submit a form
       e.preventDefault();
       setQuestionLoading(true)
       setIsScriptLoaded(false)
 
-      const generateTextFromPrompt = async (request) => {
-        const generateTextFunction = httpsCallable(functions, 'openAIHttpFunctionSec');
-        if(transcriptScript != "" && isSubscribed == true){
-          const userQuestionShow = "[ SCRIPT ANALISYS ] " + aiTxt
-          let chatLogNew = [...chatLog, {user: "me", message: `${userQuestionShow}`} ]
-          try {
-            console.log(request)
-            const result = await generateTextFunction({name: request});
-
-            //SETT LOADING FALSE
-            setQuestionLoading(false)
-            setChatLog([...chatLogNew, {user: "gpt", message: `${result.data.data.choices[0].message.content}`}])
-          } catch (error) {
-            console.error('Firebase function invocation failed:', error);
-          }
-        }else if(transcriptScript == "" && isSubscribed == false){
-          const userQuestionShow = aiTxt
-          let chatLogNew = [...chatLog, {user: "me", message: `${userQuestionShow}`} ]
-          try {
-            console.log(request)
-            const result = await generateTextFunction({name: request});
-
-            //SETT LOADING FALSE
-            setQuestionLoading(false)
-            setChatLog([...chatLogNew, {user: "gpt", message: `${result.data.data.choices[0].message.content}`}])
-          } catch (error) {
-            console.error('Firebase function invocation failed:', error);
-          }
-        }else{
-          alert("Something went wrong. Please Refresh the page !")
-        }
-      };
-
-      if(transcriptScript != "" && isSubscribed == true){
-        //QUESTION WITH TRANSCRIPT
+      if ( transcriptScript != "" ){
         const  question = "( " + transcriptScript + " )" + "this is a video script," + " " + aiTxt;
-        //SETT CHATLOG WITH THE MESSAGE
         const userQuestionShow = "[ SCRIPT ANALISYS ] " + aiTxt
         let chatLogNew = [...chatLog, {user: "me", message: `${userQuestionShow}`} ];
-        //SETT GPT LOADING
+
         setChatLog([...chatLogNew, {user: "gpt", message: "Answering..."}]);
-        //FINSIH QUESTION
-        console.log('question:', question); 
-        //FUNCTION EVENT
-        generateTextFromPrompt(question)
-      }else if (transcriptScript == "") {
+        const request = {
+          message: question,
+          type: "analasys"
+        };
+        generateTextFromPrompt(request)
+      } else if (transcriptScript == "") {
         const  question =  aiTxt;
         let chatLogNew = [...chatLog, {user: "me", message: `${question}`} ];
-        //Loading GPT
         setChatLog([...chatLogNew, {user: "gpt", message: "Answering..."}]);
-        //FINSIH QUESTION
-        console.log('question:', question); 
-        //FUNCTION EVENT
-        generateTextFromPrompt(question);
-      } else if (transcriptScript != "" && isSubscribed == false){
-        alert("Please Upgrade to Premium to use this feature")
+        const request = {
+          message: question,
+          type: "text"
+        };
+        generateTextFromPrompt(request);
       }
-      //FIRST QUESTION LOGIC
+
       setIsFirstQuestion(false)
-      //BACK TO DEFAULTS
       setAiTxt("")
       setTranscriptScript("")
-    } else{
+    } else {
       alert("Wait for the answer !")
     }
   }
 };
 
+const handleSummerising = async () =>{
+  setSummerisingIsLoading(true)
+  setQuestionLoading(true)
+  const audioMetaName = `${audioUrl + ".wav_transcription.txt"}`
+  const transRef = ref(storage,audioMetaName)
+  const transcription = await getDownloadURL(transRef)
+  try{
+    const data = await fetchTranscription(transcription)
+    const querySnaphot = data.results
+    const userFolders = [];
+    querySnaphot.forEach((doc) => {
+      userFolders.push(doc.alternatives[0].transcript);
+    });
+
+    const concatenatedText = userFolders.map(doc => doc).join(' ');
+    passTranscription(concatenatedText);
+
+    const  question = "( " + concatenatedText + " )" + " summerise this video script";
+    const userQuestionShow = "[ SUMMERY IN PROCESS ] ";
+    let chatLogNew = [...chatLog, {user: "me", message: `${userQuestionShow}`} ];
+    setChatLog([...chatLogNew, {user: "gpt", message: "Answering..."}]);
+    const request = {
+      message: question,
+      type: "sum"
+    };
+    generateTextFromPrompt(request);
+    setIsFirstQuestion(false)
+    setTranscriptScript("")
+  } catch (error) {
+    console.error('Firebase function invocation failed:', error);
+    alert("Something went wrong. Please Refresh the page !")
+    setSummerisingIsLoading(false)
+    setQuestionLoading(false)
+  }
+}
+
+
+// <===> ANALIZE THE VIDEO FEATURE  <===>
+
 const handleScriptLoading = async () =>{
   setIsScriptLoading(true)
-
   try{
     const audioMetaName = `${audioUrl + ".wav_transcription.txt"}`
     const transRef = ref(storage,audioMetaName)
     const transcription = await getDownloadURL(transRef)
-    console.log(transcription)
 
-    fetch(transcription)
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      return response.json(); // Parse the response as JSON
-    })
-    .then(data => {
-      const querySnaphot = data.results // This will log the JSON data
-      const userFolders = [];
-      querySnaphot.forEach((doc) => {
-        // Extract folder data and add it to the userFolders array
-        userFolders.push(doc.alternatives[0].transcript);
-      });
-      console.log(userFolders)
-      const concatenatedText = userFolders.map(doc => doc).join(' ');
-      console.log(concatenatedText)
-      passTranscription(concatenatedText);
-      setTranscriptScript(concatenatedText)
-      // You can now work with the JSON data as needed
-    })
-    .catch(error => {
-      console.error('There was a problem with the fetch operation:', error);
+    const data = await fetchTranscription(transcription)
+
+    const querySnaphot = data.results  
+    const userFolders = [];
+    querySnaphot.forEach((doc) => {
+      userFolders.push(doc.alternatives[0].transcript);
     });
-  
+    const concatenatedText = userFolders.map(doc => doc).join(' ');
+    passTranscription(concatenatedText);
+    setTranscriptScript(concatenatedText)
+    
     setIsScriptLoading(false)
     setIsScriptLoaded(true)
-  
   } catch (error) {
     console.log('Firebase Storage error code:', error.code); // Add this line for debugging
     if ('storage/object-not-found' === error.code) {
@@ -221,78 +270,134 @@ const handleScriptLoading = async () =>{
   }
 }
 
-const editorStateRef = useRef();
-
-const handleScriptLoaded = async () => {
+const handleScriptLoaded = () => {
   setTranscriptScript("")
   setIsScriptLoaded(false)
-  console.log("undo")
 };
 
-const handleSummerising = async () =>{
 
-  if(isSubscribed == true){
-    setSummerisingIsLoading(true)
-    setQuestionLoading(true)
-    const audioMetaName = `${audioUrl + ".wav_transcription.txt"}`
-    const transRef = ref(storage,audioMetaName)
-    const transcription = await getDownloadURL(transRef)
-    try{
-      fetch(transcription)
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
+//<********************  Components  ********************>
+
+function SimpleRichTextEditor() {
+  return(
+    <div className={`editor-inner ${!isFirstQuestion ? 'active' : ''}`}>
+    <RichTextPlugin
+      contentEditable={
+        <ContentEditable className="editor-input" />
+      }
+      ErrorBoundary={LexicalErrorBoundary}
+    />
+    <OnChangePlugin 
+      onChange={editorState => editorStateRef.current = editorState}
+    />
+    <OnChangePlugin 
+      onChange={() => {
+        if (editorStateRef.current) {
+          setContent(JSON.stringify(editorStateRef.current))
         }
-        return response.json(); // Parse the response as JSON
-      })
-      .then(data => {
-        const querySnaphot = data.results // This will log the JSON data
-        const userFolders = [];
-        querySnaphot.forEach((doc) => {
-          // Extract folder data and add it to the userFolders array
-          userFolders.push(doc.alternatives[0].transcript);
-        });
-        console.log(userFolders)
-        const concatenatedText = userFolders.map(doc => doc).join(' ');
-        console.log(concatenatedText)
-        passTranscription(concatenatedText);
-        const  question = "( " + concatenatedText + " )" + " summerise this video script";
-        const userQuestionShow = "[ SUMMERY IN PROCESS ] "
-        //SETT CHATLOG WITH THE MESSAGE
-        let chatLogNew = [...chatLog, {user: "me", message: `${userQuestionShow}`} ];
-        setChatLog([...chatLogNew, {user: "gpt", message: "Answering..."}]);
-      
-        const generateTextFromPrompt = async (request) => {
-          const generateTextFunction = httpsCallable(functions, 'openAIHttpFunctionSec');
-          const userQuestionShow = "[ SUMMERY IN PROCESS ] "
-          let chatLogNew = [...chatLog, {user: "me", message: `${userQuestionShow}`} ]
-          try {
-            console.log(request)
-            const result = await generateTextFunction({name: request});
-            //SETT LOADING FALSE
-            setChatLog([...chatLogNew, {user: "gpt", message: `${result.data.data.choices[0].message.content}`}])
-            setSummerisingIsLoading(false)
-            setQuestionLoading(false)
-          } catch (error) {
-            console.error('Firebase function invocation failed:', error);
-          }
-        };
-        
-        generateTextFromPrompt(question);
-        setIsFirstQuestion(false)
-        setTranscriptScript("")
-        // You can now work with the JSON data as needed
-      })
-      .catch(error => {
-        console.error('There was a problem with the fetch operation:', error);
-      }); 
-    } catch (error) {
-      console.error('Firebase function invocation failed:', error);
-    }
-  }else if (isSubscribed == false){
-      alert("Please Upgrade to Premium to use this feature")
+      }}
+    />
+    <StateUpdater initialHtml={`${setData}`} />
+    <HistoryPlugin />
+    <TreeViewPlugin />
+    <AutoFocusPlugin />
+    <CodeHighlightPlugin />
+    <ListPlugin />
+    <LinkPlugin />
+    <AutoLinkPlugin />
+    <ListMaxIndentLevelPlugin maxDepth={7} />
+    <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
+  </div>
+  )
+}
+
+function AiChat() {
+
+  // AI INPUT SECTION UI
+  function AiInputUI(){
+
+    return(
+      <>
+        <div className="feature-boxes">
+        { !isScriptLoaded ? ( 
+          !isScriptLoading ? ( 
+            <div className="feature_1"  onClick={handleScriptLoading}>
+                <h2>Analyze the Script</h2>
+                <h5>Ask your question if it's highlighted</h5>
+            </div>
+          ):(
+            <div className="feature_1">
+              <h2>Scipt Loading</h2>
+              <h5>It may take some times...</h5>
+            </div>
+          )
+        ):(
+          <div className="feature_1" style={{borderColor:"aquamarine"}} onClick={handleScriptLoaded}>
+            <h2>Scipt is Ready</h2>
+            <h5>Ask Anyithing I Click to Undo</h5>
+          </div>
+        )}
+        {!summerisingIsLoading?(
+          <div className="feature_2" onClick={handleSummerising}>
+            <h2>Summarise the video</h2>
+            <h5>However you want</h5>
+          </div>
+        ):(
+          <div className="feature_2" style={{borderColor:"aquamarine"}} onClick={handleSummerising}>
+            <h2>Processing</h2>
+            <h5>It may take some times</h5>
+          </div>
+        )}
+        </div>
+        {!isScriptLoaded ? (
+          <input type="text" value={aiTxt} className="ai-input" placeholder="Ask me anything" onChange={(e) => setAiTxt(e.target.value)} onKeyPress={handleEnterPress}/>
+        ):(
+          <input type="text" value={aiTxt} className="ai-input" placeholder="The Video Script is Loaded" onChange={(e) => setAiTxt(e.target.value)} onKeyPress={handleEnterPress}/>
+        )}
+      </>
+    )
   }
 
+  // 1.) STAGE - QUESTION UI
+  function InitialUI() {
+    return(
+      <div className="ai-input-cont">
+        <h1 className="ai_title">Use Clippify Ai</h1>
+        {AiInputUI()}
+      </div>
+    )
+  }
+
+  // 2.) STAGE -  AI CHAT UI
+  function AiChatUI() {
+    return(
+      <>
+        <div className="editor-inner2">
+          <div className="chat-cont">
+              <h1 className="chat-log-title">Chat Log</h1>
+              <hr className="chat-log-hr"/>
+              {chatLog.map((message,index) => (
+                <ChatMessage key={index} message={message}/>
+              ))}
+          </div>
+        </div>
+
+        <div className="input_bar_2_stage">
+          {AiInputUI()}
+        </div>
+      </>
+    )
+  }
+
+  return(
+    <div className={`editor-inner ${!isFirstQuestion ? 'active' : ''}`}>
+    {isFirstQuestion ? (
+      InitialUI()
+    ) : (
+      AiChatUI()
+    )}
+    </div>
+  )
 }
 
 return (
@@ -300,128 +405,11 @@ return (
   <div className="editor-container">
     <ToolbarPlugin isActive={setIsAiActive} />
     {!isAiActive ? (
-      <div className={`editor-inner ${!isFirstQuestion ? 'active' : ''}`}>
-        <RichTextPlugin
-          contentEditable={
-            <ContentEditable className="editor-input" />
-          }
-          ErrorBoundary={LexicalErrorBoundary}
-        />
-        <OnChangePlugin onChange={editorState => editorStateRef.current = editorState} />
-        <OnChangePlugin onChange={() => {
-  if (editorStateRef.current) {
-    setContent(JSON.stringify(editorStateRef.current))
-  }
-}}/>
-        <StateUpdater initialHtml={`${setData}`} />
-        <HistoryPlugin />
-        <TreeViewPlugin />
-        <AutoFocusPlugin />
-        <CodeHighlightPlugin />
-        <ListPlugin />
-        <LinkPlugin />
-        <AutoLinkPlugin />
-        <ListMaxIndentLevelPlugin maxDepth={7} />
-        <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
-      </div>
-    ) : 
-    <div className={`editor-inner ${!isFirstQuestion ? 'active' : ''}`}>
-    {isFirstQuestion ? (
-      <div className="ai-input-cont">
-        <h1 className="ai_title">Use Clippify Ai</h1>
-        
-        
-        <div className="feature-boxes">
-      { !isScriptLoaded?( 
-          !isScriptLoading? ( 
-            <div className="feature_1"  onClick={handleScriptLoading}>
-                <h2>Analyze the Script</h2>
-                <h5>Ask your question if it's highlighted</h5>
-            </div>):(
-                <div className="feature_1">
-                <h2>Scipt Loading</h2>
-                <h5>It may take some times...</h5>
-            </div>
-            )
-            ):(
-              <div className="feature_1" style={{borderColor:"aquamarine"}} onClick={handleScriptLoaded}>
-                <h2>Scipt is Ready</h2>
-                <h5>Ask Anyithing I Click to Undo</h5>
-            </div>
-            )}
+      SimpleRichTextEditor()
+    ) : (
+      AiChat()
 
-          {!summerisingIsLoading?(
-            <div className="feature_2" onClick={handleSummerising}>
-                <h2>Summarise the video</h2>
-                <h5>However you want</h5>
-            </div>):(
-                <div className="feature_2" style={{borderColor:"aquamarine"}} onClick={handleSummerising}>
-                <h2>Processing</h2>
-                <h5>It may take some times</h5>
-            </div>
-            )}
-        </div>
-        {!isScriptLoaded ? (
-      <input type="text" value={aiTxt} className="ai-input" placeholder="Ask me anything" onChange={handleInputChange} onKeyPress={handleEnterPress}/>
-      ):(
-        <input type="text" value={aiTxt} className="ai-input" placeholder="The Video Script is Loaded" onChange={handleInputChange} onKeyPress={handleEnterPress}/>
-      )
-    }
-    
-      </div>
-        ) : (
-        <>
-        <div className="editor-inner2">
-        <div className="chat-cont">
-            <h1 className="chat-log-title">Chat Log</h1>
-            <hr className="chat-log-hr"/>
-    {chatLog.map((message,index) => (
-          <ChatMessage key={index} message={message}/>
-          ))}
-          </div>
-          
-        </div>
-        <div className="input_bar_2_stage">
-        <div className="feature-boxes">
-        { !isScriptLoaded?( 
-            !isScriptLoading? ( 
-            <div className="feature_1" onClick={handleScriptLoading}>
-                <h2>Analyze the Script</h2>
-                <h5>If it's green you can ask your question</h5>
-            </div>):(
-                <div className="feature_1">
-                <h2>Scipt Loading</h2>
-                <h5>It may take some times...</h5>
-            </div>
-            )
-            ):(
-            <div className="feature_1" style={{borderColor:"aquamarine"}} onClick={handleScriptLoaded}>
-                <h2>Scipt is Ready</h2>
-                <h5>Click to Undo</h5>
-            </div>
-            )}
-
-{!summerisingIsLoading?(
-            <div className="feature_2" onClick={handleSummerising}>
-                <h2>Summarise the video</h2>
-                <h5>However you want</h5>
-            </div>):(
-                <div className="feature_2" style={{borderColor:"aquamarine"}} onClick={handleSummerising}>
-                  <h2>Processing</h2>
-                <h5>It may take some times</h5>
-            </div>
-            )}
-        </div>
-    {!isScriptLoaded ? (
-      <input type="text" value={aiTxt} className="ai-input" placeholder="Ask me anything" onChange={handleInputChange} onKeyPress={handleEnterPress}/>
-      ):(
-        <input type="text" value={aiTxt} className="ai-input" placeholder="The Video Script is Loaded" onChange={handleInputChange} onKeyPress={handleEnterPress}/>
-      )
-    }
-      </div>
-      </>
-      )}
-      </div>}
+    )}
   </div>
 </LexicalComposer>
 );

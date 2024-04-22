@@ -46,6 +46,7 @@ const [fileElements, setFileElements] = useState([]);
 const [userData,setUserData] = useState([]);
 
 //TOGGLE STATES
+const [show, setShow] = useState(false);
 const [secBarState, setSecBarState] = useState(false);
 
 //PAGINATION
@@ -396,7 +397,9 @@ useEffect(() => {
       console.error("Error storing HTML content: ", error);
     }
   };
-  storeHTMLContentInFirestore(saveContent)
+  if(saveContent !== null){
+    storeHTMLContentInFirestore(saveContent)
+  }
 }, [saveContent]);
 
 
@@ -565,7 +568,6 @@ return (
           <div className='rich-txt-editor'>
             <Editor 
               isSubscribed={userData.subscription}  
-              data={setGeneratedHtml} 
               setData={newContentUpdate} 
               setContent={setSaveContent} 
               audioUrl={fileElements.storage_path_audio} 
@@ -575,9 +577,19 @@ return (
         </div>
       </div>
 
-      <Row>
-        <Example handleUploadTrigger={createRelatedFile} setTitleInput={setFileTitle} setFileImageEXT={setFileImage} setExtractMetaEXT={setMetaData} setPassedAudioDataUrlEXT={setAudioFile} setVideoUrlEXT={setTrimmedVideoFile} />
-      </Row>
+
+        <Example 
+              triggerPopUp={show}
+              setTagInput={setFileTag}
+              handleUploadTrigger={createRelatedFile}
+              setTitleInput={setFileTitle}
+              setFileImageEXT={setFileImage} 
+              setExtractMetaEXT={setMetaData} 
+              setPassedAudioDataUrlEXT={setAudioFile} 
+              setVideoUrlEXT={setTrimmedVideoFile} 
+              handleHideTrigger={() => setShow(false)}
+        />
+  
   </Container>
 )}
 export default File

@@ -11,9 +11,19 @@ const WelcomeRow = ({
                 <h6>Clippify is the place to learn and save information</h6>
             </div>
             <div className='cloud'>
-            <div><CircularWithValueLabel progress={userData.storage_take / 1000000 / 1000} className='cloud-progress'/></div>
-                {userData.subscription ?(<h5>{(userData.storage_take / 1000000 / 1000).toFixed(2)} / 100 GB</h5>):(<h5>{(userData.storage_take / 1000000 / 1000).toFixed(2)} / 10 GB</h5>)}
-            <h2 className='cloud-title'>Cloud Storage</h2>
+                <div>
+                    <CircularWithValueLabel progress={userData.storage_take / 10000 / 1000} className='cloud-progress'/>
+                </div>
+                {userData.subscription ?(
+                    <h5>
+                        {(userData.storage_take / 10000 / 1000).toFixed(1)} / 100 GB
+                    </h5>
+                ):(
+                    <h5>
+                        {(userData.storage_take / 1000000 / 1000).toFixed(2)} / 10 GB
+                    </h5>
+                )}
+                <h2 className='cloud-title'>Cloud Storage</h2>
             </div>
         </div>
     )

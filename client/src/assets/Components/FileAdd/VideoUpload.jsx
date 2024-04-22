@@ -59,7 +59,7 @@ useEffect(() => {
 }, [triggerPopUp]);
 
   return (
-    <div style={{display:"flex",flexDirection:"column",width:"100%"}}>
+    <div style={{display:"flex",flexDirection:"column",width:"10%"}}>
       <BasicSpeedDial togglePopup={() => handleShow("lg-down")} />
       <Modal className='uploadMediaModal' show={show} fullscreen={fullscreen} onHide={() => handleHide() }>
         <Modal.Header className={localStorage.getItem('theme') == "dark"?('uploadMediaModalHeader-Dark'):("uploadMediaModalHeader-Light")} closeButton>
